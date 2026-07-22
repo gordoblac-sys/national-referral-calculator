@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 import csv
 import io
 import math
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List
 
 import streamlit as st
@@ -556,6 +558,259 @@ st.markdown(
 # Application
 # -----------------------------
 
+# SAFESTREETS_CLEAN_BRAND_START
+
+def _ss_image_data_uri(image_path: Path) -> str:
+    """Convert the local shield PNG into a browser image."""
+    if not image_path.exists():
+        return ""
+
+    encoded = base64.b64encode(
+        image_path.read_bytes()
+    ).decode("ascii")
+
+    return f"data:image/png;base64,{encoded}"
+
+
+_ss_shield_path = (
+    Path(__file__).resolve().parent
+    / "assets"
+    / "safestreets-shield.png"
+)
+
+_ss_shield_uri = _ss_image_data_uri(
+    _ss_shield_path
+)
+
+_ss_shield_markup = (
+    f'<img class="ss-brand-shield" '
+    f'src="{_ss_shield_uri}" '
+    f'alt="SafeStreets shield" />'
+    if _ss_shield_uri
+    else (
+        '<div class="ss-brand-shield-fallback">'
+        '🛡️'
+        '</div>'
+    )
+)
+
+st.markdown(
+    """
+<style>
+    .block-container {
+        padding-bottom: 5rem !important;
+    }
+
+    .ss-brand-strip {
+        display: grid;
+        grid-template-columns:
+            auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 1rem;
+        margin: 0 0 1rem;
+        padding: .8rem 1rem;
+        border: 1px solid
+            rgba(14, 165, 233, .28);
+        border-radius: 18px;
+        background:
+            radial-gradient(
+                circle at 92% 15%,
+                rgba(14, 165, 233, .18),
+                transparent 14rem
+            ),
+            linear-gradient(
+                135deg,
+                #020617 0%,
+                #062f4f 58%,
+                #075985 100%
+            );
+        box-shadow:
+            0 14px 38px
+            rgba(2, 132, 199, .14);
+    }
+
+    .ss-brand-shield,
+    .ss-brand-shield-fallback {
+        width: 64px;
+        height: 64px;
+        object-fit: contain;
+        filter:
+            drop-shadow(
+                0 8px 13px
+                rgba(14, 165, 233, .28)
+            );
+    }
+
+    .ss-brand-shield-fallback {
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        background:
+            rgba(255, 255, 255, .08);
+        font-size: 2rem;
+    }
+
+    .ss-brand-copy {
+        min-width: 0;
+    }
+
+    .ss-brand-name {
+        color: #7dd3fc;
+        font-size: .72rem;
+        font-weight: 850;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+
+    .ss-brand-title {
+        margin-top: .12rem;
+        color: white;
+        font-size:
+            clamp(1.05rem, 2.2vw, 1.5rem);
+        font-weight: 850;
+        line-height: 1.15;
+        letter-spacing: -.02em;
+    }
+
+    .ss-brand-tagline {
+        margin-top: .18rem;
+        color:
+            rgba(226, 232, 240, .78);
+        font-size: .78rem;
+        line-height: 1.35;
+    }
+
+    .ss-star-lockup {
+        min-width: max-content;
+        text-align: right;
+    }
+
+    .ss-stars {
+        color: #fbbf24;
+        font-size: 1.18rem;
+        line-height: 1;
+        letter-spacing: .1rem;
+        text-shadow:
+            0 0 16px
+            rgba(251, 191, 36, .28);
+    }
+
+    .ss-star-label {
+        margin-top: .28rem;
+        color:
+            rgba(255, 255, 255, .68);
+        font-size: .62rem;
+        font-weight: 800;
+        letter-spacing: .075em;
+        text-transform: uppercase;
+    }
+
+    .ss-created-by {
+        position: fixed;
+        right: 14px;
+        bottom: 10px;
+        z-index: 999999;
+        padding: .38rem .66rem;
+        border: 1px solid
+            rgba(14, 165, 233, .24);
+        border-radius: 999px;
+        color:
+            rgba(226, 232, 240, .88);
+        background:
+            rgba(2, 6, 23, .86);
+        box-shadow:
+            0 8px 22px
+            rgba(2, 6, 23, .20);
+        backdrop-filter: blur(10px);
+        font-size: .68rem;
+        letter-spacing: .02em;
+    }
+
+    .ss-created-by strong {
+        color: #7dd3fc;
+        font-weight: 850;
+    }
+
+    @media (max-width: 700px) {
+        .ss-brand-strip {
+            grid-template-columns:
+                auto minmax(0, 1fr);
+            gap: .72rem;
+            padding: .72rem .78rem;
+            border-radius: 15px;
+        }
+
+        .ss-brand-shield,
+        .ss-brand-shield-fallback {
+            width: 48px;
+            height: 48px;
+        }
+
+        .ss-star-lockup {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: .45rem;
+            border-top: 1px solid
+                rgba(255, 255, 255, .10);
+            text-align: left;
+        }
+
+        .ss-star-label {
+            margin-top: 0;
+        }
+
+        .ss-created-by {
+            right: 8px;
+            bottom: 7px;
+            font-size: .61rem;
+        }
+    }
+</style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    (
+        '<section class="ss-brand-strip">'
+
+        f'{_ss_shield_markup}'
+
+        '<div class="ss-brand-copy">'
+        '<div class="ss-brand-name">'
+        'SafeStreets'
+        '</div>'
+
+        '<div class="ss-brand-title">'
+        'National Referral Calculator'
+        '</div>'
+
+        '<div class="ss-brand-tagline">'
+        'Protection built with confidence, '
+        'accuracy, and a five-star experience.'
+        '</div>'
+        '</div>'
+
+        '<div class="ss-star-lockup">'
+        '<div class="ss-stars" '
+        'aria-label="Five stars">'
+        '★★★★★'
+        '</div>'
+
+        '<div class="ss-star-label">'
+        'Five-Star Customer Experience'
+        '</div>'
+        '</div>'
+
+        '</section>'
+    ),
+    unsafe_allow_html=True,
+)
+# SAFESTREETS_CLEAN_BRAND_END
+
+
 
 
 st.markdown(
@@ -989,3 +1244,15 @@ with st.expander("Calculation rules used"):
         - A configuration is not allowed when remaining commission is below zero.
         """
     )
+
+# SAFESTREETS_FOOTER_START
+st.markdown(
+    (
+        '<div class="ss-created-by">'
+        'Created by '
+        '<strong>Gordon Black</strong>'
+        '</div>'
+    ),
+    unsafe_allow_html=True,
+)
+# SAFESTREETS_FOOTER_END
