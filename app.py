@@ -34,7 +34,7 @@ MAX_COMMISSION_POINTS = 650.0
 
 NAP_MONTHLY_FEE = 7.0
 NAP_ADDITIONAL_PACKAGE_POINTS = 60.0
-MAX_MONTHLY_FEE = 5.0
+MAX_MONTHLY_FEE = 10.0
 MAX_ADDITIONAL_COMMISSION_POINTS = 75.0
 INSTALLATION_OPTION_FEE = 199.0
 INSTALLATION_ADDITIONAL_COMMISSION_POINTS = 50.0
@@ -471,7 +471,7 @@ def build_csv_summary(
     if package.account_type == "Residential":
         writer.writerow(["$199 Installation Option", "Yes" if installation_option else "No"])
         writer.writerow(["NAP Option", "Included" if package.nap_included else ("Yes" if nap_option else "No")])
-        writer.writerow(["$5 MMR MAX Option", "Yes" if max_option else "No"])
+        writer.writerow(["$10 MMR MAX Option", "Yes" if max_option else "No"])
         writer.writerow(["$100 VRC Option", "Yes" if vrc_option else "No"])
         writer.writerow(["Installation Fee", f"{results['installation_fee']:.2f}"])
     else:
@@ -663,9 +663,9 @@ with pricing_right:
             )
 
         max_option = st.checkbox(
-            "$5 MMR MAX Option",
+            "$10 MMR MAX Option",
             help=(
-                "Adds $5 monthly and automatically adds 75 commission points."
+                "Adds $10 monthly and automatically adds 75 commission points."
             ),
             key=f"max_{safe_key(package.name)}",
         )
@@ -972,7 +972,7 @@ with st.expander("Calculation rules used"):
           **{points(INSTALLATION_ADDITIONAL_COMMISSION_POINTS)} commission points**.
         - The **$7 NAP option** automatically adds
           **{points(NAP_ADDITIONAL_PACKAGE_POINTS)} package points**.
-        - The **$5 MMR MAX option** automatically adds
+        - The **$10 MMR MAX option** automatically adds
           **{points(MAX_ADDITIONAL_COMMISSION_POINTS)} commission points**.
         - The **$100 VRC option** automatically deducts
           **{points(abs(VRC_COMMISSION_POINTS))} commission points**.
