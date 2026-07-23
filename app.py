@@ -810,6 +810,161 @@ st.markdown(
 )
 # SAFESTREETS_CLEAN_BRAND_END
 
+# SAFESTREETS_LOADING_SHIELD_START
+st.markdown(
+    f"""
+    <style>
+        /*
+        Replace Streamlit's top-right running animation
+        with the SafeStreets shield.
+        */
+        div[data-testid="stStatusWidget"] {{
+            position: relative !important;
+            width: 44px !important;
+            min-width: 44px !important;
+            height: 44px !important;
+            min-height: 44px !important;
+            overflow: visible !important;
+        }}
+
+        /*
+        Hide Streamlit's running person, bike,
+        message, and stop-button artwork.
+        */
+        div[data-testid="stStatusWidget"] * {{
+            visibility: hidden !important;
+        }}
+
+        /*
+        The status widget only appears while Streamlit
+        is running, so the shield spins only during loading.
+        */
+        div[data-testid="stStatusWidget"]::before {{
+            content: "";
+            position: absolute;
+            z-index: 999999;
+            top: 4px;
+            right: 4px;
+            width: 36px;
+            height: 36px;
+
+            background-image:
+                url("{_ss_shield_uri}");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+
+            transform-origin: 50% 50%;
+            animation:
+                safestreetShieldSpin
+                1.15s linear infinite;
+
+            filter:
+                drop-shadow(
+                    0 0 5px
+                    rgba(56, 189, 248, .65)
+                )
+                drop-shadow(
+                    0 5px 8px
+                    rgba(2, 132, 199, .30)
+                );
+        }}
+
+        div[data-testid="stStatusWidget"]::after {{
+            content: "";
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border:
+                1px solid
+                rgba(56, 189, 248, .25);
+            box-shadow:
+                inset 0 0 12px
+                rgba(14, 165, 233, .10);
+            animation:
+                safestreetShieldGlow
+                1.15s ease-in-out infinite;
+        }}
+
+        @keyframes safestreetShieldSpin {{
+            0% {{
+                transform: rotate(0deg) scale(.96);
+            }}
+
+            50% {{
+                transform: rotate(180deg) scale(1.04);
+            }}
+
+            100% {{
+                transform: rotate(360deg) scale(.96);
+            }}
+        }}
+
+        @keyframes safestreetShieldGlow {{
+            0%,
+            100% {{
+                opacity: .45;
+                transform: scale(.92);
+            }}
+
+            50% {{
+                opacity: 1;
+                transform: scale(1.05);
+            }}
+        }}
+
+        @media (max-width: 600px) {{
+            div[data-testid="stStatusWidget"] {{
+                width: 38px !important;
+                min-width: 38px !important;
+                height: 38px !important;
+                min-height: 38px !important;
+            }}
+
+            div[data-testid="stStatusWidget"]::before {{
+                width: 31px;
+                height: 31px;
+                top: 4px;
+                right: 3px;
+            }}
+
+            div[data-testid="stStatusWidget"]::after {{
+                width: 36px;
+                height: 36px;
+                top: 1px;
+                right: 1px;
+            }}
+        }}
+
+        @media (prefers-reduced-motion: reduce) {{
+            div[data-testid="stStatusWidget"]::before {{
+                animation:
+                    safestreetShieldPulse
+                    1.2s ease-in-out infinite;
+            }}
+
+            @keyframes safestreetShieldPulse {{
+                0%,
+                100% {{
+                    opacity: .65;
+                    transform: scale(.94);
+                }}
+
+                50% {{
+                    opacity: 1;
+                    transform: scale(1.04);
+                }}
+            }}
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+# SAFESTREETS_LOADING_SHIELD_END
+
 
 
 
