@@ -47,6 +47,15 @@ POSITIVE_MMR_POINT_RATE = 15.0
 NEGATIVE_MMR_POINT_RATE = 35.0
 
 
+COMMERCIAL_PROHIBITED_LIFE_SAFETY = frozenset(
+    {
+        "Smoke/Heat Detector",
+        "Carbon Detector",
+        "Smoke Combo",
+    }
+)
+
+
 @dataclass(frozen=True)
 class EquipmentItem:
     name: str
@@ -241,6 +250,18 @@ COMMERCIAL_PACKAGES: Dict[str, Package] = {
 # Calculation engine
 # -----------------------------
 
+
+def equipment_allowed_for_account(
+    account_type: str,
+    item_name: str,
+) -> bool:
+    """Return whether equipment is allowed for this account type."""
+    return not (
+        account_type == "Commercial"
+        and item_name in COMMERCIAL_PROHIBITED_LIFE_SAFETY
+    )
+
+
 def equipment_total_points(quantities: Dict[str, int]) -> int:
     return sum(EQUIPMENT[name].points * int(quantity) for name, quantity in quantities.items())
 
@@ -292,6 +313,25 @@ def calculate_results(
     vrc_option: bool = False,
     actual_activation: float | None = None,
 ) -> Dict[str, float]:
+    # COMMERCIAL_CALCULATION_SAFETY_LOCK
+    if package.account_type == "Commercial":
+        prohibited_selected = sorted(
+            item_name
+            for item_name, quantity in quantities.items()
+            if int(quantity) > 0
+            and not equipment_allowed_for_account(
+                package.account_type,
+                item_name,
+            )
+        )
+
+        if prohibited_selected:
+            raise ValueError(
+                "The following equipment is not permitted "
+                "on Commercial referrals: "
+                + ", ".join(prohibited_selected)
+            )
+
     selected_equipment_points = float(equipment_total_points(quantities))
 
     extra_package_points = (
@@ -1138,11 +1178,36 @@ with reset_col:
 quantities: Dict[str, int] = {}
 
 categories = ("Security & Life Safety", "Video", "Automation")
+# COMMERCIAL_EQUIPMENT_NOTICE
+if account_type == "Commercial":
+    st.caption(
+        "Commercial referrals are limited to "
+        "security, video, and automation equipment."
+    )
+
+# COMMERCIAL_SECURITY_LABEL_OVERRIDE
+category_labels["Security & Life Safety"] = (
+    "🛡️ Security"
+    if account_type == "Commercial"
+    else "🛡️ Security & Life Safety"
+)
+
 category_tabs = st.tabs(categories)
 
 for tab, category in zip(category_tabs, categories):
     with tab:
         category_items = [item for item in EQUIPMENT.values() if item.category == category]
+
+        # COMMERCIAL_EQUIPMENT_FILTER_START
+        category_items = [
+            item
+            for item in category_items
+            if equipment_allowed_for_account(
+                account_type,
+                item.name,
+            )
+        ]
+        # COMMERCIAL_EQUIPMENT_FILTER_END
         columns = st.columns(3)
 
         for index, item in enumerate(category_items):
