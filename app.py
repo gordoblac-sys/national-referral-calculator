@@ -1959,7 +1959,7 @@ with st.expander("Calculation rules used"):
 st.markdown(
     (
         '<div class="ss-created-by">'
-        'Created by '
+        'Developed by '
         '<strong>Gordon Black</strong>'
         '</div>'
     ),
