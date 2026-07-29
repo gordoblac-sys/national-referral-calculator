@@ -1185,14 +1185,37 @@ if account_type == "Commercial":
         "security, video, and automation equipment."
     )
 
-# COMMERCIAL_SECURITY_LABEL_OVERRIDE
-category_labels["Security & Life Safety"] = (
-    "🛡️ Security"
-    if account_type == "Commercial"
-    else "🛡️ Security & Life Safety"
+
+# COMMERCIAL_EQUIPMENT_NOTICE
+if account_type == "Commercial":
+    st.caption(
+        "Commercial referrals are limited to security, "
+        "video, and automation equipment."
+    )
+
+# SAFE_EQUIPMENT_CATEGORY_SETUP
+categories = (
+    "Security & Life Safety",
+    "Video",
+    "Automation",
 )
 
-category_tabs = st.tabs(categories)
+category_labels = {
+    "Security & Life Safety": (
+        "🛡️ Security"
+        if account_type == "Commercial"
+        else "🛡️ Security & Life Safety"
+    ),
+    "Video": "📹 Video",
+    "Automation": "🏠 Automation",
+}
+
+category_tabs = st.tabs(
+    [
+        category_labels[category]
+        for category in categories
+    ]
+)
 
 for tab, category in zip(category_tabs, categories):
     with tab:
