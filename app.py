@@ -213,7 +213,7 @@ COMMERCIAL_PACKAGES: Dict[str, Package] = {
         account_type="Commercial",
         package_points=250,
         standard_mmr=62.99,
-        allowed_mmr=(66.99, 65.99, 64.99, 63.99, 62.99, 61.99, 60.99, 59.99, 58.99),
+        allowed_mmr=(62.99, 61.99, 60.99, 59.99, 58.99,),
         included_equipment={
             "Contacts": 2,
             "Motion Detector": 1,
@@ -229,7 +229,7 @@ COMMERCIAL_PACKAGES: Dict[str, Package] = {
         account_type="Commercial",
         package_points=210,
         standard_mmr=57.99,
-        allowed_mmr=(61.99, 60.99, 59.99, 58.99, 57.99, 56.99, 55.99, 54.99, 53.99),
+        allowed_mmr=(57.99, 56.99, 55.99, 54.99, 53.99,),
         included_equipment={
             "Contacts": 2,
             "Motion Detector": 1,
@@ -244,7 +244,7 @@ COMMERCIAL_PACKAGES: Dict[str, Package] = {
         account_type="Commercial",
         package_points=80,
         standard_mmr=51.99,
-        allowed_mmr=(55.99, 54.99, 53.99, 52.99, 51.99, 50.99, 49.99),
+        allowed_mmr=(51.99, 50.99, 49.99,),
         included_equipment={
             "Contacts": 2,
             "Motion Detector": 1,
@@ -258,7 +258,7 @@ COMMERCIAL_PACKAGES: Dict[str, Package] = {
         account_type="Commercial",
         package_points=80,
         standard_mmr=49.99,
-        allowed_mmr=(51.99, 50.99, 49.99, 48.99, 47.99, 46.99, 45.99),
+        allowed_mmr=(49.99, 48.99, 47.99, 46.99, 45.99,),
         included_equipment={
             "Contacts": 2,
             "Motion Detector": 1,
@@ -383,6 +383,18 @@ def calculate_results(
 ) -> Dict[str, float]:
     # COMMERCIAL_CALCULATION_SAFETY_LOCK
     # COMPLETE_PACKAGE_ADDON_SAFETY
+    # COMMERCIAL_BASE_MMR_CEILING
+    if (
+        package.account_type == "Commercial"
+        and selected_mmr
+        > package.standard_mmr + 0.0001
+    ):
+        raise ValueError(
+            "Commercial MMR cannot exceed the "
+            f"approved base MMR of "
+            f"${package.standard_mmr:,.2f}."
+        )
+
     if (
         package.account_type == "Residential"
         and package.name
@@ -832,6 +844,38 @@ def run_formula_tests() -> None:
         650,
         abs_tol=0.001,
     )
+
+    # COMMERCIAL_MMR_CEILING_TESTS
+    for commercial_package in COMMERCIAL_PACKAGES.values():
+        assert all(
+            allowed_mmr
+            <= commercial_package.standard_mmr + 0.0001
+            for allowed_mmr in commercial_package.allowed_mmr
+        )
+
+        assert max(
+            commercial_package.allowed_mmr
+        ) == commercial_package.standard_mmr
+
+        try:
+            calculate_results(
+                commercial_package,
+                commercial_package.standard_mmr + 1.00,
+                dict(commercial_package.included_equipment),
+                actual_activation=(
+                    commercial_package.activation_par
+                ),
+            )
+        except ValueError as error:
+            assert (
+                "cannot exceed" in str(error)
+            )
+        else:
+            raise AssertionError(
+                f"{commercial_package.name} "
+                "allowed an MMR above its "
+                "approved base MMR."
+            )
 
 
 run_formula_tests()
@@ -1466,6 +1510,14 @@ with pricing_left:
         ),
         key=f"mmr_{safe_key(account_type)}_{safe_key(package.name)}",
     )
+
+    # COMMERCIAL_MMR_SELECTION_NOTICE
+    if account_type == "Commercial":
+        st.caption(
+            "Commercial MMR may be reduced, but it "
+            "cannot exceed the approved base MMR of "
+            f"{money(package.standard_mmr)}."
+        )
 
 installation_option = False
 nap_option = False
