@@ -58,6 +58,23 @@ COMMERCIAL_PROHIBITED_LIFE_SAFETY = frozenset(
 )
 
 
+
+RESIDENTIAL_PACKAGE_ALLOWED_CATEGORIES = {
+    "Secure - $53.99": (
+        "Security & Life Safety",
+    ),
+    "Smart - $63.99": (
+        "Security & Life Safety",
+        "Automation",
+    ),
+    "Complete - $64.99": (
+        "Security & Life Safety",
+        "Video",
+        "Automation",
+    ),
+}
+
+
 @dataclass(frozen=True)
 class EquipmentItem:
     name: str
@@ -248,6 +265,51 @@ def equipment_allowed_for_account(
     )
 
 
+
+def allowed_equipment_categories(
+    package: Package,
+) -> tuple[str, ...]:
+    """Return equipment categories allowed by the selected package."""
+
+    if package.account_type == "Commercial":
+        return (
+            "Security & Life Safety",
+            "Video",
+            "Automation",
+        )
+
+    try:
+        return RESIDENTIAL_PACKAGE_ALLOWED_CATEGORIES[
+            package.name
+        ]
+    except KeyError as error:
+        raise ValueError(
+            f"Residential equipment rules are missing for "
+            f"{package.name}."
+        ) from error
+
+
+def equipment_allowed_for_package(
+    package: Package,
+    item: EquipmentItem,
+) -> bool:
+    """Check category and account restrictions for one item."""
+
+    if item.category not in allowed_equipment_categories(
+        package
+    ):
+        return False
+
+    if (
+        package.account_type == "Commercial"
+        and item.name
+        in COMMERCIAL_PROHIBITED_LIFE_SAFETY
+    ):
+        return False
+
+    return True
+
+
 def equipment_total_points(quantities: Dict[str, int]) -> int:
     return sum(EQUIPMENT[name].points * int(quantity) for name, quantity in quantities.items())
 
@@ -329,6 +391,25 @@ def calculate_results(
                 "on Commercial referrals: "
                 + ", ".join(prohibited_selected)
             )
+
+    # PACKAGE_EQUIPMENT_CATEGORY_SAFETY_LOCK
+    invalid_package_equipment = sorted(
+        item_name
+        for item_name, quantity in quantities.items()
+        if int(quantity) > 0
+        and item_name in EQUIPMENT
+        and not equipment_allowed_for_package(
+            package,
+            EQUIPMENT[item_name],
+        )
+    )
+
+    if invalid_package_equipment:
+        raise ValueError(
+            f"The selected {package.name} package does not "
+            "allow the following equipment: "
+            + ", ".join(invalid_package_equipment)
+        )
 
     selected_equipment_points = float(equipment_total_points(quantities))
 
@@ -467,6 +548,58 @@ def run_formula_tests() -> None:
             "total_monthly_mmr"
         ]
         == 81.99
+    )
+
+    # PACKAGE_EQUIPMENT_AVAILABILITY_TESTS
+    secure_package = RESIDENTIAL_PACKAGES[
+        "Secure - $53.99"
+    ]
+    smart_package = RESIDENTIAL_PACKAGES[
+        "Smart - $63.99"
+    ]
+    complete_package = RESIDENTIAL_PACKAGES[
+        "Complete - $64.99"
+    ]
+
+    assert allowed_equipment_categories(
+        secure_package
+    ) == (
+        "Security & Life Safety",
+    )
+
+    assert equipment_allowed_for_package(
+        secure_package,
+        EQUIPMENT["Smoke/Heat Detector"],
+    )
+
+    assert not equipment_allowed_for_package(
+        secure_package,
+        EQUIPMENT["Doorlock"],
+    )
+
+    assert not equipment_allowed_for_package(
+        secure_package,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        smart_package,
+        EQUIPMENT["Doorlock"],
+    )
+
+    assert not equipment_allowed_for_package(
+        smart_package,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        complete_package,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        complete_package,
+        EQUIPMENT["Doorlock"],
     )
 
     total_productivity = COMMERCIAL_PACKAGES["Total Productivity @62.99"]
@@ -1225,17 +1358,10 @@ if account_type == "Commercial":
 
 
 # COMMERCIAL_EQUIPMENT_NOTICE
-if account_type == "Commercial":
-    st.caption(
-        "Commercial referrals are limited to security, "
-        "video, and automation equipment."
-    )
 
-# SAFE_EQUIPMENT_CATEGORY_SETUP
-categories = (
-    "Security & Life Safety",
-    "Video",
-    "Automation",
+# PACKAGE_BASED_EQUIPMENT_SETUP
+categories = allowed_equipment_categories(
+    package
 )
 
 category_labels = {
@@ -1248,6 +1374,30 @@ category_labels = {
     "Automation": "🏠 Automation",
 }
 
+if account_type == "Commercial":
+    st.caption(
+        "Commercial referrals are limited to security, "
+        "video, and automation equipment."
+    )
+else:
+    package_equipment_messages = {
+        "Secure - $53.99": (
+            "Secure includes Security & Life Safety equipment."
+        ),
+        "Smart - $63.99": (
+            "Smart includes Security & Life Safety and "
+            "Automation equipment."
+        ),
+        "Complete - $64.99": (
+            "Complete includes Security & Life Safety, "
+            "Video, and Automation equipment."
+        ),
+    }
+
+    st.caption(
+        package_equipment_messages[package.name]
+    )
+
 category_tabs = st.tabs(
     [
         category_labels[category]
@@ -1255,9 +1405,20 @@ category_tabs = st.tabs(
     ]
 )
 
-for tab, category in zip(category_tabs, categories):
+for tab, category in zip(
+    category_tabs,
+    categories,
+):
     with tab:
-        category_items = [item for item in EQUIPMENT.values() if item.category == category]
+        category_items = [
+            item
+            for item in EQUIPMENT.values()
+            if item.category == category
+            and equipment_allowed_for_package(
+                package,
+                item,
+            )
+        ]
 
         # COMMERCIAL_EQUIPMENT_FILTER_START
         category_items = [
