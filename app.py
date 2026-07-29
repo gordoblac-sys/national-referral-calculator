@@ -37,6 +37,8 @@ MAX_COMMISSION_POINTS = 650.0
 NAP_MONTHLY_FEE = 7.0
 NAP_ADDITIONAL_PACKAGE_POINTS = 60.0
 MAX_MONTHLY_FEE = 10.0
+
+COMPLETE_RESIDENTIAL_PACKAGE_NAME = "Complete - $64.99"
 MAX_ADDITIONAL_COMMISSION_POINTS = 75.0
 INSTALLATION_OPTION_FEE = 199.0
 INSTALLATION_ADDITIONAL_COMMISSION_POINTS = 50.0
@@ -119,22 +121,6 @@ EQUIPMENT: Dict[str, EquipmentItem] = {
 
 
 RESIDENTIAL_PACKAGES: Dict[str, Package] = {
-    "Complete w. NAP - $64.99 + $7 = $71.99": Package(
-        name="Complete w. NAP - $64.99 + $7 = $71.99",
-        account_type="Residential",
-        package_points=310,
-        standard_mmr=64.99,
-        allowed_mmr=(
-            64.99, 63.99, 62.99, 61.99, 60.99, 59.99, 58.99,
-            57.99, 56.99, 55.99, 54.99, 53.99, 52.99, 51.99,
-        ),
-        included_equipment={
-            "Contacts": 3,
-            "Motion Detector": 1,
-            "Outdoor Camera": 1,
-        },
-        nap_included=True,
-    ),
     "Complete - $64.99": Package(
         name="Complete - $64.99",
         account_type="Residential",
@@ -314,6 +300,18 @@ def calculate_results(
     actual_activation: float | None = None,
 ) -> Dict[str, float]:
     # COMMERCIAL_CALCULATION_SAFETY_LOCK
+    # COMPLETE_PACKAGE_ADDON_SAFETY
+    if (
+        package.account_type == "Residential"
+        and package.name
+        != COMPLETE_RESIDENTIAL_PACKAGE_NAME
+        and (nap_option or max_option)
+    ):
+        raise ValueError(
+            "NAP and MAX upgrades are only "
+            "available from the Complete package."
+        )
+
     if package.account_type == "Commercial":
         prohibited_selected = sorted(
             item_name
@@ -430,6 +428,46 @@ def run_formula_tests() -> None:
     )
     assert secure_lower_mmr["mmr_commission_adjustment"] == -35
     assert secure_lower_mmr["remaining_commission"] == 615
+
+    # THREE_RESIDENTIAL_PACKAGE_TESTS
+    assert set(RESIDENTIAL_PACKAGES) == {
+        "Complete - $64.99",
+        "Smart - $63.99",
+        "Secure - $53.99",
+    }
+
+    assert MAX_MONTHLY_FEE == 10.0
+
+    complete_package = RESIDENTIAL_PACKAGES[
+        COMPLETE_RESIDENTIAL_PACKAGE_NAME
+    ]
+
+    complete_with_nap = calculate_results(
+        complete_package,
+        complete_package.standard_mmr,
+        dict(complete_package.included_equipment),
+        nap_option=True,
+    )
+
+    assert (
+        complete_with_nap["total_monthly_mmr"]
+        == 71.99
+    )
+
+    complete_with_nap_and_max = calculate_results(
+        complete_package,
+        complete_package.standard_mmr,
+        dict(complete_package.included_equipment),
+        nap_option=True,
+        max_option=True,
+    )
+
+    assert (
+        complete_with_nap_and_max[
+            "total_monthly_mmr"
+        ]
+        == 81.99
+    )
 
     total_productivity = COMMERCIAL_PACKAGES["Total Productivity @62.99"]
     at_par = calculate_results(
@@ -1099,30 +1137,30 @@ with pricing_right:
             key=f"install_{safe_key(package.name)}",
         )
 
-        if package.nap_included:
-            st.checkbox(
-                "$7 Nest Aware Plus (NAP)",
-                value=True,
-                disabled=True,
-                help="NAP is already included in this package.",
-                key=f"nap_included_{safe_key(package.name)}",
-            )
-        else:
+        # COMPLETE_ONLY_NAP_MAX_OPTIONS
+        if package.name == COMPLETE_RESIDENTIAL_PACKAGE_NAME:
             nap_option = st.checkbox(
                 "$7 Nest Aware Plus (NAP) Option",
                 help=(
-                    "Adds $7 monthly and automatically adds 60 package points."
+                    "Adds $7 monthly and automatically "
+                    "adds 60 package points."
                 ),
                 key=f"nap_{safe_key(package.name)}",
             )
 
-        max_option = st.checkbox(
-            "$10 MMR MAX Option",
-            help=(
-                "Adds $10 monthly and automatically adds 75 commission points."
-            ),
-            key=f"max_{safe_key(package.name)}",
-        )
+            max_option = st.checkbox(
+                "$10 MMR MAX Option",
+                help=(
+                    "Adds $10 monthly and automatically "
+                    "adds 75 commission points."
+                ),
+                key=f"max_{safe_key(package.name)}",
+            )
+        else:
+            st.caption(
+                "NAP and MAX upgrades are available "
+                "from the Complete package."
+            )
 
         vrc_option = st.checkbox(
             "VRC ($100) Option",
