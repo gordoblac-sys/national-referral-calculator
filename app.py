@@ -49,6 +49,7 @@ POSITIVE_MMR_POINT_RATE = 15.0
 NEGATIVE_MMR_POINT_RATE = 35.0
 
 
+
 COMMERCIAL_PROHIBITED_LIFE_SAFETY = frozenset(
     {
         "Smoke/Heat Detector",
@@ -56,6 +57,7 @@ COMMERCIAL_PROHIBITED_LIFE_SAFETY = frozenset(
         "Smoke Combo",
     }
 )
+
 
 
 
@@ -74,6 +76,25 @@ RESIDENTIAL_PACKAGE_ALLOWED_CATEGORIES = {
     ),
 }
 
+
+
+COMMERCIAL_PACKAGE_ALLOWED_CATEGORIES = {
+    "Premise Secure+ @49.99": (
+        "Security & Life Safety",
+    ),
+    "Premise Remote @51.99": (
+        "Security & Life Safety",
+    ),
+    "Enterprise View @57.99": (
+        "Security & Life Safety",
+        "Video",
+    ),
+    "Total Productivity @62.99": (
+        "Security & Life Safety",
+        "Video",
+        "Automation",
+    ),
+}
 
 @dataclass(frozen=True)
 class EquipmentItem:
@@ -266,34 +287,33 @@ def equipment_allowed_for_account(
 
 
 
+
 def allowed_equipment_categories(
     package: Package,
 ) -> tuple[str, ...]:
-    """Return equipment categories allowed by the selected package."""
+    """Return categories available for the selected package."""
 
-    if package.account_type == "Commercial":
-        return (
-            "Security & Life Safety",
-            "Video",
-            "Automation",
-        )
+    package_rules = (
+        COMMERCIAL_PACKAGE_ALLOWED_CATEGORIES
+        if package.account_type == "Commercial"
+        else RESIDENTIAL_PACKAGE_ALLOWED_CATEGORIES
+    )
 
     try:
-        return RESIDENTIAL_PACKAGE_ALLOWED_CATEGORIES[
-            package.name
-        ]
+        return package_rules[package.name]
     except KeyError as error:
         raise ValueError(
-            f"Residential equipment rules are missing for "
+            f"Equipment-category rules are missing for "
             f"{package.name}."
         ) from error
+
 
 
 def equipment_allowed_for_package(
     package: Package,
     item: EquipmentItem,
 ) -> bool:
-    """Check category and account restrictions for one item."""
+    """Return whether one equipment item is allowed."""
 
     if item.category not in allowed_equipment_categories(
         package
@@ -411,6 +431,25 @@ def calculate_results(
             + ", ".join(invalid_package_equipment)
         )
 
+    # UNIFIED_PACKAGE_EQUIPMENT_SAFETY_LOCK
+    invalid_equipment = sorted(
+        item_name
+        for item_name, quantity in quantities.items()
+        if int(quantity) > 0
+        and item_name in EQUIPMENT
+        and not equipment_allowed_for_package(
+            package,
+            EQUIPMENT[item_name],
+        )
+    )
+
+    if invalid_equipment:
+        raise ValueError(
+            f"The selected {package.name} package does not "
+            "allow the following equipment: "
+            + ", ".join(invalid_equipment)
+        )
+
     selected_equipment_points = float(equipment_total_points(quantities))
 
     extra_package_points = (
@@ -483,62 +522,279 @@ def calculate_results(
 # Internal validation
 # -----------------------------
 
+
 def run_formula_tests() -> None:
-    for package in list(RESIDENTIAL_PACKAGES.values()) + list(COMMERCIAL_PACKAGES.values()):
-        included = package_included_points(package)
-        assert included <= package.package_points, (
-            f"{package.name}: included equipment exceeds package points."
-        )
+    """Validate package, equipment, MMR, and commission rules."""
 
-    secure = RESIDENTIAL_PACKAGES["Secure - $53.99"]
-    secure_base = calculate_results(
-        secure, secure.standard_mmr, dict(secure.included_equipment)
-    )
-    assert secure_base["remaining_commission"] == 650
-
-    secure_with_camera = dict(secure.included_equipment)
-    secure_with_camera["Indoor Camera"] = 1
-    secure_camera = calculate_results(
-        secure, secure.standard_mmr, secure_with_camera
-    )
-    assert secure_camera["equipment_overage"] == 130
-    assert secure_camera["remaining_commission"] == 520
-
-    secure_lower_mmr = calculate_results(
-        secure, 52.99, dict(secure.included_equipment)
-    )
-    assert secure_lower_mmr["mmr_commission_adjustment"] == -35
-    assert secure_lower_mmr["remaining_commission"] == 615
-
-    # THREE_RESIDENTIAL_PACKAGE_TESTS
-    assert set(RESIDENTIAL_PACKAGES) == {
-        "Complete - $64.99",
-        "Smart - $63.99",
-        "Secure - $53.99",
-    }
-
-    assert MAX_MONTHLY_FEE == 10.0
-
-    complete_package = RESIDENTIAL_PACKAGES[
-        COMPLETE_RESIDENTIAL_PACKAGE_NAME
+    all_packages = [
+        *RESIDENTIAL_PACKAGES.values(),
+        *COMMERCIAL_PACKAGES.values(),
     ]
 
+    for package in all_packages:
+        included_points = package_included_points(
+            package
+        )
+
+        assert included_points <= package.package_points, (
+            f"{package.name}: included equipment exceeds "
+            "the package point allowance."
+        )
+
+        for item_name, quantity in (
+            package.included_equipment.items()
+        ):
+            if quantity <= 0:
+                continue
+
+            assert item_name in EQUIPMENT, (
+                f"{package.name}: unknown equipment "
+                f"{item_name}."
+            )
+
+            assert equipment_allowed_for_package(
+                package,
+                EQUIPMENT[item_name],
+            ), (
+                f"{package.name}: included equipment "
+                f"{item_name} is not allowed."
+            )
+
+    assert set(RESIDENTIAL_PACKAGES) == {
+        "Secure - $53.99",
+        "Smart - $63.99",
+        "Complete - $64.99",
+    }
+
+    assert set(COMMERCIAL_PACKAGES) == {
+        "Premise Secure+ @49.99",
+        "Premise Remote @51.99",
+        "Enterprise View @57.99",
+        "Total Productivity @62.99",
+    }
+
+    # Residential package-category rules
+    secure = RESIDENTIAL_PACKAGES[
+        "Secure - $53.99"
+    ]
+    smart = RESIDENTIAL_PACKAGES[
+        "Smart - $63.99"
+    ]
+    complete = RESIDENTIAL_PACKAGES[
+        "Complete - $64.99"
+    ]
+
+    assert allowed_equipment_categories(secure) == (
+        "Security & Life Safety",
+    )
+
+    assert allowed_equipment_categories(smart) == (
+        "Security & Life Safety",
+        "Automation",
+    )
+
+    assert allowed_equipment_categories(complete) == (
+        "Security & Life Safety",
+        "Video",
+        "Automation",
+    )
+
+    assert equipment_allowed_for_package(
+        secure,
+        EQUIPMENT["Smoke/Heat Detector"],
+    )
+
+    assert not equipment_allowed_for_package(
+        secure,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        smart,
+        EQUIPMENT["Doorlock"],
+    )
+
+    assert not equipment_allowed_for_package(
+        smart,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        complete,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        complete,
+        EQUIPMENT["Doorlock"],
+    )
+
+    # Commercial package-category rules
+    premise_secure_plus = COMMERCIAL_PACKAGES[
+        "Premise Secure+ @49.99"
+    ]
+    premise_remote = COMMERCIAL_PACKAGES[
+        "Premise Remote @51.99"
+    ]
+    enterprise_view = COMMERCIAL_PACKAGES[
+        "Enterprise View @57.99"
+    ]
+    total_productivity = COMMERCIAL_PACKAGES[
+        "Total Productivity @62.99"
+    ]
+
+    assert allowed_equipment_categories(
+        premise_secure_plus
+    ) == (
+        "Security & Life Safety",
+    )
+
+    assert allowed_equipment_categories(
+        premise_remote
+    ) == (
+        "Security & Life Safety",
+    )
+
+    assert allowed_equipment_categories(
+        enterprise_view
+    ) == (
+        "Security & Life Safety",
+        "Video",
+    )
+
+    assert allowed_equipment_categories(
+        total_productivity
+    ) == (
+        "Security & Life Safety",
+        "Video",
+        "Automation",
+    )
+
+    assert equipment_allowed_for_package(
+        premise_secure_plus,
+        EQUIPMENT["Contacts"],
+    )
+
+    assert not equipment_allowed_for_package(
+        premise_secure_plus,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert not equipment_allowed_for_package(
+        premise_remote,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        enterprise_view,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert not equipment_allowed_for_package(
+        enterprise_view,
+        EQUIPMENT["Doorlock"],
+    )
+
+    assert equipment_allowed_for_package(
+        total_productivity,
+        EQUIPMENT["Indoor Camera"],
+    )
+
+    assert equipment_allowed_for_package(
+        total_productivity,
+        EQUIPMENT["Doorlock"],
+    )
+
+    # Commercial life safety must always remain prohibited.
+    for commercial_package in (
+        premise_secure_plus,
+        premise_remote,
+        enterprise_view,
+        total_productivity,
+    ):
+        for prohibited_item in (
+            "Smoke/Heat Detector",
+            "Carbon Detector",
+            "Smoke Combo",
+        ):
+            assert not equipment_allowed_for_package(
+                commercial_package,
+                EQUIPMENT[prohibited_item],
+            )
+
+    # Residential commission and equipment-overage tests
+    secure_base = calculate_results(
+        secure,
+        secure.standard_mmr,
+        dict(secure.included_equipment),
+    )
+
+    assert secure_base["remaining_commission"] == 650
+
+    secure_with_smoke_combo = dict(
+        secure.included_equipment
+    )
+    secure_with_smoke_combo["Smoke Combo"] = 1
+
+    secure_security_overage = calculate_results(
+        secure,
+        secure.standard_mmr,
+        secure_with_smoke_combo,
+    )
+
+    assert (
+        secure_security_overage[
+            "equipment_overage"
+        ]
+        == 100
+    )
+
+    assert (
+        secure_security_overage[
+            "remaining_commission"
+        ]
+        == 550
+    )
+
+    secure_lower_mmr = calculate_results(
+        secure,
+        52.99,
+        dict(secure.included_equipment),
+    )
+
+    assert (
+        secure_lower_mmr[
+            "mmr_commission_adjustment"
+        ]
+        == -35
+    )
+
+    assert (
+        secure_lower_mmr[
+            "remaining_commission"
+        ]
+        == 615
+    )
+
+    # Complete NAP and MAX tests
     complete_with_nap = calculate_results(
-        complete_package,
-        complete_package.standard_mmr,
-        dict(complete_package.included_equipment),
+        complete,
+        complete.standard_mmr,
+        dict(complete.included_equipment),
         nap_option=True,
     )
 
     assert (
-        complete_with_nap["total_monthly_mmr"]
+        complete_with_nap[
+            "total_monthly_mmr"
+        ]
         == 71.99
     )
 
     complete_with_nap_and_max = calculate_results(
-        complete_package,
-        complete_package.standard_mmr,
-        dict(complete_package.included_equipment),
+        complete,
+        complete.standard_mmr,
+        dict(complete.included_equipment),
         nap_option=True,
         max_option=True,
     )
@@ -550,66 +806,19 @@ def run_formula_tests() -> None:
         == 81.99
     )
 
-    # PACKAGE_EQUIPMENT_AVAILABILITY_TESTS
-    secure_package = RESIDENTIAL_PACKAGES[
-        "Secure - $53.99"
-    ]
-    smart_package = RESIDENTIAL_PACKAGES[
-        "Smart - $63.99"
-    ]
-    complete_package = RESIDENTIAL_PACKAGES[
-        "Complete - $64.99"
-    ]
-
-    assert allowed_equipment_categories(
-        secure_package
-    ) == (
-        "Security & Life Safety",
-    )
-
-    assert equipment_allowed_for_package(
-        secure_package,
-        EQUIPMENT["Smoke/Heat Detector"],
-    )
-
-    assert not equipment_allowed_for_package(
-        secure_package,
-        EQUIPMENT["Doorlock"],
-    )
-
-    assert not equipment_allowed_for_package(
-        secure_package,
-        EQUIPMENT["Indoor Camera"],
-    )
-
-    assert equipment_allowed_for_package(
-        smart_package,
-        EQUIPMENT["Doorlock"],
-    )
-
-    assert not equipment_allowed_for_package(
-        smart_package,
-        EQUIPMENT["Indoor Camera"],
-    )
-
-    assert equipment_allowed_for_package(
-        complete_package,
-        EQUIPMENT["Indoor Camera"],
-    )
-
-    assert equipment_allowed_for_package(
-        complete_package,
-        EQUIPMENT["Doorlock"],
-    )
-
-    total_productivity = COMMERCIAL_PACKAGES["Total Productivity @62.99"]
+    # Commercial activation commission tests
     at_par = calculate_results(
         total_productivity,
         total_productivity.standard_mmr,
         dict(total_productivity.included_equipment),
         actual_activation=299,
     )
-    assert math.isclose(at_par["remaining_commission"], 400, abs_tol=0.001)
+
+    assert math.isclose(
+        at_par["remaining_commission"],
+        400,
+        abs_tol=0.001,
+    )
 
     at_max = calculate_results(
         total_productivity,
@@ -617,7 +826,12 @@ def run_formula_tests() -> None:
         dict(total_productivity.included_equipment),
         actual_activation=599,
     )
-    assert math.isclose(at_max["remaining_commission"], 650, abs_tol=0.001)
+
+    assert math.isclose(
+        at_max["remaining_commission"],
+        650,
+        abs_tol=0.001,
+    )
 
 
 run_formula_tests()
@@ -1349,17 +1563,10 @@ with reset_col:
 quantities: Dict[str, int] = {}
 
 categories = ("Security & Life Safety", "Video", "Automation")
-# COMMERCIAL_EQUIPMENT_NOTICE
-if account_type == "Commercial":
-    st.caption(
-        "Commercial referrals are limited to "
-        "security, video, and automation equipment."
-    )
 
 
-# COMMERCIAL_EQUIPMENT_NOTICE
 
-# PACKAGE_BASED_EQUIPMENT_SETUP
+# UNIFIED_PACKAGE_EQUIPMENT_SETUP
 categories = allowed_equipment_categories(
     package
 )
@@ -1374,29 +1581,36 @@ category_labels = {
     "Automation": "🏠 Automation",
 }
 
-if account_type == "Commercial":
-    st.caption(
-        "Commercial referrals are limited to security, "
-        "video, and automation equipment."
-    )
-else:
-    package_equipment_messages = {
-        "Secure - $53.99": (
-            "Secure includes Security & Life Safety equipment."
-        ),
-        "Smart - $63.99": (
-            "Smart includes Security & Life Safety and "
-            "Automation equipment."
-        ),
-        "Complete - $64.99": (
-            "Complete includes Security & Life Safety, "
-            "Video, and Automation equipment."
-        ),
-    }
+package_equipment_messages = {
+    "Secure - $53.99": (
+        "Secure includes Security & Life Safety equipment."
+    ),
+    "Smart - $63.99": (
+        "Smart includes Security & Life Safety and "
+        "Automation equipment."
+    ),
+    "Complete - $64.99": (
+        "Complete includes Security & Life Safety, "
+        "Video, and Automation equipment."
+    ),
+    "Premise Secure+ @49.99": (
+        "Premise Secure+ includes Security equipment."
+    ),
+    "Premise Remote @51.99": (
+        "Premise Remote includes Security equipment."
+    ),
+    "Enterprise View @57.99": (
+        "Enterprise View includes Security and Video equipment."
+    ),
+    "Total Productivity @62.99": (
+        "Total Productivity includes Security, Video, "
+        "and Automation equipment."
+    ),
+}
 
-    st.caption(
-        package_equipment_messages[package.name]
-    )
+st.caption(
+    package_equipment_messages[package.name]
+)
 
 category_tabs = st.tabs(
     [
